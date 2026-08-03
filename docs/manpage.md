@@ -364,7 +364,7 @@ Host-specific images (without `universal` set to true) include only the intersec
 Next modules listed in the `modules` config option are then added/removed, and all modules specified in `modules_force_load` are added.
 Finally all modules required for the previously included modules are added as well.
 
-## Unified Kernel Image
+### Unified Kernel Image
 A [Unified Kernel Image](https://uapi-group.org/specifications/specs/unified_kernel_image/) (UKI) is a PE binary that bundles all boot components (kernel, initrd, kernel command line,  UEFI boot stub etc..) as a single executable.
 This allows booting directly through the firmware (UEFI) and authenticating all of the boot components at once for Secure Boot.
 
@@ -374,7 +374,7 @@ Distributions that already drive kernel installation through `kernel-install` (e
 
 > The legacy Arch-only helper `/usr/lib/booster/regenerate_uki` is deprecated: it does not embed the kernel command line and is therefore vulnerable to trivial attacks.
 
-## TPM2 auto-unlock and supplantation defense
+### TPM2 auto-unlock and supplantation defense
 secure-boot+disk encryption setups auto-unlock the volume, using a TPM2 enrolled key that is only unsealable when a signed image is booted. but a naive setup (PCR#7 only) is suceptible to the insertion of a malicious unlockable volume with a system that steals the key.
 
 The two methods of countering this are to prevent access to the key after initramfs exit and to bind the initramfs to the exact volume (e.g. by embedding the LUKS header into the image).
