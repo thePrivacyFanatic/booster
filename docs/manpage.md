@@ -375,9 +375,9 @@ Distributions that already drive kernel installation through `kernel-install` (e
 > The legacy Arch-only helper `/usr/lib/booster/regenerate_uki` is deprecated: it does not embed the kernel command line and is therefore vulnerable to trivial attacks.
 
 ### TPM2 auto-unlock and supplantation defense
-secure-boot+disk encryption setups auto-unlock the volume, using a TPM2 enrolled key that is only unsealable when a signed image is booted. but a naive setup (PCR#7 only) is suceptible to the insertion of a malicious unlockable volume with a system that steals the key.
+For setups which aim to protect against hardware access, secure-boot+disk encryption setups enssure the volume key is only unsealable when a signed image is booted. but a naive setup (PCR#7 only) is suceptible to the insertion of a [malicious unlockable volume](https://oddlama.org/blog/bypassing-disk-encryption-with-tpm2-unlock/) with a system that steals the key.
 
-The two methods of countering this are to prevent access to the key after initramfs exit and to bind the initramfs to the exact volume (e.g. by embedding the LUKS header into the image).
+This is prevented by either preventing access to the key after initramfs exit or by binding the initramfs to the exact volume (e.g. by embedding the LUKS header into the image).
 
 Preventing post-initramfs access to the TPM key is done by either binding to a signed PCR#11 policy for the values before the initrd finishes (upon which it measures `leave-initrd` into the PCR) or by binding to an empty value of PCR#15 (which gets all LUKS keys measured into it).  
 both versions prevent access to the key after exiting the initramfs, and additional volumes can be added easily via keyfiles on root and crypttab.
