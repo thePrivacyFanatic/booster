@@ -128,12 +128,19 @@ It is a convenience script that performs the same type of image regeneration as 
 Build initrd image. Usage: `booster [OPTIONS] build [build-OPTIONS] output`
 
 * `-f`, `--force` Overwrite existing initrd file.
+
 * `--init-binary` <default: _/usr/lib/booster/init_> Booster 'init' binary location.
+
 * `--compression` <default: _zstd_> Output file compression. Possible values: _zstd_, _gzip_, _xz_, _lz4_, _none_.
+
 * `--kernel-version` Linux kernel version to generate initramfs for.
+
 * `--config` <default: _/etc/booster.yaml_> Configuration file path.
+
 * `--universal` Add wide range of modules/tools to allow this image boot at different machines.
+
 * `--strip` Strip ELF files (binaries, shared libraries and kernel modules) before adding it to the image.
+
 * `--crypttab` <default: _/etc/crypttab_> Path to the crypttab file to read at image build time. Overrides `crypttab_path` from the config file. If neither is set, booster reads `/etc/crypttab` and silently skips it if the file is absent or unreadable. If specified explicitly, any read error is reported as a failure.
 
 ### cat
@@ -149,21 +156,36 @@ Unpack image. Usage: `booster [OPTIONS] unpack image output-dir`
 Some parts of booster boot functionality can be modified with kernel boot parameters. These parameters are usually set through bootloader config. Booster boot uses following kernel parameters:
 
  * `root=$deviceref` device reference to root device. See [Device Reference](#device-reference) and [ROOT PARTITION DISCOVERY](#root-partition-discovery) for how booster handles unencrypted, LUKS, and autodiscovered roots.
+
  * `rootfstype=$TYPE` (e.g. rootfstype=ext4). By default booster tries to detect the root filesystem type. But if the autodetection does not work then this kernel parameter is useful. Also please file a ticket so we can improve the code that detects filetypes.
+
  * `rootflags=$OPTIONS` mount options for the root filesystem, e.g. rootflags=user_xattr,nobarrier. In partition autodiscovery mode GPT attribute 60 ("read-only") is taken into account.
+
  * `rd.luks.uuid=$UUID` UUID of the LUKS partition where the root partition is enclosed. booster will try to unlock this LUKS device.
+ 
  * `rd.luks.name=$UUID=$NAME` similar to rd.luks.uuid parameter but also specifies the name used for the LUKS device opening.
+ 
  * `rd.luks.key=$UUID=$PATH` absolute path to a keyfile in the initrd/initramfs which can be used to unlock the device identified by UUID, if this file does not exist or fails to unlock it will fall back to a password request.
- * `rd.luks.header=$UUID=$PATH` detached LUKS header for LUKS volume with UUID.`$PATH` can be an absolute path in the initramfs (including block devices) or a `$path:$deviceref` which will temporarely mount the device as read-only.
+ 
+ * `rd.luks.header=$UUID=$PATH` detached LUKS header for LUKS volume with UUID.`$PATH` can be an absolute path in the initramfs (to file included via `extra_files:`/block device) or a `$path:$deviceref` which will temporarely mount the device as read-only.
+ 
  * `rd.luks.data=$UUID=$deviceref` data device for the LUKS volume with UUID as the device itself does not hold it.
- * `rd.luks.options=opt1,opt2` same options but higher priority than [crypttab](#crypttab) options column except for the lack ov build-time proccessing. note that this is universal but a device-specific option is planned. 
+ 
+ * `rd.luks.options=opt1,opt2` supports `discard`, `same-cpu-crypt`, `submit-from-crypt-cpus`, `no-read-workqueue`, `no-write-workqueue`, `tpm2-measure-pcr=no`, `tpm2-signature=<path>` with a higher priority than [crypttab](#crypttab) and persistent flags in header. (note that this is universal but a device-specific option is planned which will also not fail boot when an unknown option is inserted). 
+ 
  * `rd.modules_force_load` a comma-separated list of extra kernel modules which should be force loaded.
+ 
  * `resume=$deviceref` device reference to suspend-to-disk device.
+ 
  * `zfs=$pool/$dataset` specifies what ZFS dataset needs to be used for root partition. This option is only used if ZFS config option is enabled. If ZFS filesystem is enabled then `root=` boot param is ignored.
+ 
  * `booster.log` configures logging. accepts a loglevel (from most to least verbose `debug`, `info`, `warning`, `error` or `null`) optionally  `,(comma)console` to print to console in addition to the kernel kmsg buffer (accessible with `dmesg` or `journalctl -b`).
  note that enabling debug level automatically disables kmsg throttling.
+ 
  * `booster.debug` an obsolete option that is equivalent to `booster.log=debug,console`.
+ 
  * `quiet` Set booster init verbosity to minimum. This option is ignored if `booster.debug` or `booster.log` is set.
+ 
  * `init=$PATH` path to user-space init binary. If not specified then default value `/sbin/init` is used.
 
 ## ROOT PARTITION DISCOVERY
@@ -212,6 +234,8 @@ using any GPT partition editor (gdisk, sgdisk, fdisk, cfdisk, parted, ...). cons
 
 The same GUID covers both plain-filesystem and LUKS-encrypted roots. Booster scans only the disk that holds the active EFI System Partition.
 
+> as in other places no more than one partition should be marked as root on a disk.
+
 ### When boot stalls
 
 If `root=/dev/mapper/<name>` is set but no source above produces that
@@ -242,11 +266,14 @@ precedence and unspecified options being added from crypttab.
 
 Booster-specific behaviour for selected options:
 
- * **`keyfile=`**: path of form `/path:deviceref` to keyfile on a separate device. Booster temporarily mounts the device read-only at boot to read the key.
  * **`header=`**: behavior depends on form, `/path` (plain absolute) bundles the file into the initramfs automatically, `/path:deviceref` mounts the device at boot and `/dev/...` uses the raw block device directly.
+ 
  * **`fido2-device=`**: makes the generator automatically bundle `fido2plugin.so` (like `enable_fido2: true` in config); accepted for compatibility as booster discovers enrolled tokens from the LUKS2 header and ignores the crypttab option value.
+ 
  * **`keyfile-timeout=`** / **`token-timeout=`**: accepts a bare integer (seconds) or any duration string accepted by Go's `time.ParseDuration` (e.g. `30s`, `2m`).
+ 
  * **`tpm2-measure-pcr=no`**: Disables the PCR 15 re-unseal latch (see [TPM2 auto-unlock and supplantation defense](#tpm2-auto-unlock-and-supplantation-defense)) which is on by default.
+ 
  * **`tpm2-signature=`**: path to a systemd PCR signature JSON for a signed (authorized) PCR policy. `false` disables signed-policy unlock. When unset on UKI boot booster reads the signature that systemd-stub unpacks from the UKI into the initramfs at `/.extra/tpm2-pcr-signature.json`. otherwise required for signed-policy unlock.
 
  > Note that booster also supports LUKS v2 persistent flags stored with the partition metadata. Any specified options are added on top of the persistent flags.
@@ -296,13 +323,16 @@ Security notes:
    Per-session attempts are capped at 10 wrong submissions before
    disconnect; the SSH handshake itself must complete within 15
    seconds (slow-loris guard).
+
  * The host private key and the enrolled `authorized_keys` are read
    at image build time and embedded into the initramfs. Anyone with
    read access to `/boot` (or the image file) can extract both. Treat
    them as compromised whenever `/boot` is exposed; rebuild the image
    to rotate the host key.
+
  * The host key fingerprint is stable across reboots (no auto-regen),
    so `known_hosts` does not churn.
+
  * The SSH port plus a stolen copy of any private key listed in
    `authorized_keys` is enough for an attacker to keep guessing LUKS
    passphrases against the live server. We disconnect a session after
@@ -310,12 +340,14 @@ Security notes:
    reconnecting and trying 10 more. The cap slows brute force, it
    does not stop it — anyone who can reach the SSH port is in a
    position roughly equivalent to direct LUKS keyslot exposure.
+
  * `ssh_listen: :22` listens on every network interface that comes
    up at boot, on both IPv4 and IPv6 — including link-local IPv6
    addresses (`fe80::...`) that auto-configure without DHCP. Pin
    `ssh_listen` to an exact address (for example `10.0.0.5:22`) so
    only the interface you actually intend to expose is reachable,
    and firewall the port at the network boundary.
+
  * The session is restricted to the passphrase prompt — no shell, no
    command execution, no port forwarding, no PAM, no PTY allocation.
 
@@ -327,12 +359,19 @@ Device reference has one of the following values:
 
  * `/dev/XXX` path to specific device file, it can be either a path to real device/partition like `/dev/sda1`, `/dev/nvme0n1` or path to dm-mapper virtual device like
    `/dev/mapper/root` or `/dev/vg_mesos/lv_mesos_containers`.
+
  * `UUID=$UUID` or `/dev/disk/by-uuid/$UUID` references device by its filesystem/LUKS UUID. See notes about UUID formatting rules below.
+
  * `LABEL=$LABEL` or `/dev/disk/by-label/$LABEL` references device by its filesystem/LUKS label.
+
  * `PARTUUID=$UUID` or `/dev/disk/by-partuuid/$UUID` references device by GPT partition UUID.
+
  * `PARTUUID=$UUID/PARTNROFF=$OFFSET` references device by $OFFSET from a GPT partition specified by $UUID e.g. `PARTUUID=fd59d06d-ffa8-473b-94f0-6584cb2b6665/PARTNROFF=2`.
+
  * `PARTLABEL=$LABEL` or `/dev/disk/by-partlabel/$LABEL` references device by GPT partition label.
+
  * `HWPATH=$PATH` or `/dev/disk/by-path/$PATH` references device by deterministic hardware path e.g. `pci-0000:02:00.0-nvme-1-part2`.
+
  * `WWID=$ID` or `/dev/disk/by-id/$ID` references device by its wwid e.g. `nvme-KXG6AZNV256G_TOSHIBA_40SA13GZF6B1-part3`
 
 > all UUID cmdline parameters can optionally be enclosed with quote symbol `"` though it is not recommended.
@@ -354,12 +393,11 @@ any token that successfully unlocks dismisses all others immediately.
 
 > when using plymouth the new builds should automatically clear the prompt right upon unlock.
 
-For LUKS volumes with multiple FIDO2 tokens enrolled booster checks each device for the credentials before prompting for PIN to skip irrelevant devices.  
-FIDO tokens enrolled with `--fido2-with-user-verification=true` always prompt for a password regardless.
-
+#### FIDO2 prompt order
+Booster checks FIDO devices and only prompts for PIN if the device's credentials match an enrolled token or a token is enrolled with `--fido2-with-user-verification=true`. If no devices match an enrolled token, booster will wait until token timeout or the user advances the prompt.
 
 ### Modules selection
-Booster has a list of that are likely to be needed for boot hardcoded (as `defaultModuleList` in `generator.go`).
+Booster has a list of modules that are likely to be needed for boot hardcoded (as `defaultModuleList` in `generator.go`).
 Host-specific images (without `universal` set to true) include only the intersection of this list and the currently loaded modules.  
 Next modules listed in the `modules` config option are then added/removed, and all modules specified in `modules_force_load` are added.
 Finally all modules required for the previously included modules are added as well.
@@ -379,8 +417,11 @@ For setups which aim to protect against hardware access, secure-boot+disk encryp
 
 This is prevented by either preventing access to the key after initramfs exit or by binding the initramfs to the exact volume (e.g. by embedding the LUKS header into the image).
 
-Preventing post-initramfs access to the TPM key is done by either binding to a signed PCR#11 policy for the values before the initrd finishes (upon which it measures `leave-initrd` into the PCR) or by binding to an empty value of PCR#15 (which gets all LUKS keys measured into it).  
-both versions prevent access to the key after exiting the initramfs, and additional volumes can be added easily via keyfiles on root and crypttab.
+Preventing post-initramfs access to the TPM key is done by either binding to a signed PCR#11 policy for the values before the initrd finishes (upon which it measures `leave-initrd` into the PCR) or by binding to an empty value of PCR#15 (which gets all LUKS keys measured into it).
+
+> `tpm2-measure-pcr=no` in `rd.luks.options` disables these PCR measurements
+
+in both versions additional volumes can be added easily with keyfiles on root (and crypttab).
 
 ## DEBUGGING
 If you have a problem with booster boot tool you can enable debug mode to get more
