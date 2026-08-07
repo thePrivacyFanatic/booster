@@ -171,7 +171,7 @@ Some parts of booster boot functionality can be modified with kernel boot parame
  
  * `rd.luks.data=$UUID=$deviceref` data device for the LUKS volume with UUID as the device itself does not hold it.
  
- * `rd.luks.options=opt1,opt2` supports `discard`, `same-cpu-crypt`, `submit-from-crypt-cpus`, `no-read-workqueue`, `no-write-workqueue`, `tpm2-measure-pcr=no`, `tpm2-signature=<path>` with a higher priority than [crypttab](#crypttab) and persistent flags in header. (note that this is universal but a device-specific option is planned which will also not fail boot when an unknown option is inserted). 
+ * `rd.luks.options=opt1,opt2` supports `discard`, `same-cpu-crypt`, `submit-from-crypt-cpus`, `no-read-workqueue`, `no-write-workqueue`, `tpm2-measure-pcr=no`, `tpm2-signature=<path>` with a higher priority than [crypttab](#crypttab) and persistent flags in header. (Note that this is universal but a device-specific option is planned which will also not fail boot when an unknown option is inserted). 
  
  * `rd.modules_force_load` a comma-separated list of extra kernel modules which should be force loaded.
  
