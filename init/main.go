@@ -14,7 +14,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unsafe"
 
 	"github.com/yookoala/realpath"
 	"golang.org/x/sys/unix"
@@ -387,6 +386,12 @@ func processBlkInfo(blk *blkInfo) error {
 		pendingDevicesMu.Unlock()
 	}
 
+	if blk.format == "btrfs" {
+		if err := btrfsScanDevice(devpath); err != nil {
+			warning("btrfs device scan %s: %v", devpath, err)
+		}
+	}
+
 	if blk.matchesRef(cmdResume) {
 		if err := resume(devpath); err != nil {
 			return err
@@ -635,59 +640,6 @@ func mountRootFs(dev, fstype string) error {
 
 	rootMounted.Done()
 	return nil
-}
-
-// Wait until all devices of a multiple-device filesystem are scanned and registered within the kernel module
-func waitForBtrfsDevicesReady(dev string) error {
-	controlFile, err := os.OpenFile("/dev/btrfs-control", os.O_RDWR, 0)
-	if err != nil {
-		return err
-	}
-	defer controlFile.Close()
-
-	/* this should be 4k */
-	var btrfsIoctlVolArgs struct {
-		fs   int64
-		name [4088]uint8
-	}
-	copy(btrfsIoctlVolArgs.name[:], dev)
-
-	const BTRFS_IOCTL_MAGIC uintptr = 0x94
-	const BTRFS_IOCTL_NR_DEVICES_READY uintptr = 39
-
-	/* these three should all be uintptr */
-	ioctlFd := controlFile.Fd()
-	BTRFS_IOC_DEVICES_READY := ior(BTRFS_IOCTL_MAGIC, BTRFS_IOCTL_NR_DEVICES_READY, unsafe.Sizeof(btrfsIoctlVolArgs))
-	ptrBtrfsIoctlVolArgs := uintptr(unsafe.Pointer(&btrfsIoctlVolArgs))
-
-	/* prepare to wait */
-	const btrfsTimeout time.Duration = 10 * time.Minute
-	timeNow := time.Now()
-	timeStart := timeNow
-	timeEnd := timeStart.Add(btrfsTimeout)
-
-	/* actually wait */
-	for timeNow.Before(timeEnd) {
-		ready, err := ioctlCheckZero(ioctlFd, BTRFS_IOC_DEVICES_READY, ptrBtrfsIoctlVolArgs)
-		if err != nil {
-			return err
-		}
-		timeElapsed := timeNow.Sub(timeStart)
-		if ready {
-			if timeElapsed > time.Second {
-				info("Multi-device btrfs at %v became fully assembled", dev)
-			} else {
-				debug("Btrfs at %v is ready without wait, this should only happen for single-device btrfs or the last one in multi-device btrfs", dev)
-			}
-			return nil
-		} else if timeElapsed < time.Second {
-			info("Start waiting for multi-device btrfs at %v to become fullly assembled, timeout 10 minutes", dev)
-		}
-		info("Waiting for multi-device btrfs at %v to become fullly assembled, waited %v", dev, timeElapsed)
-		time.Sleep(time.Second)
-		timeNow = time.Now()
-	}
-	return fmt.Errorf("Timeout waiting for multi-device btrfs at %v to become fully assembled", dev)
 }
 
 func mountFlags() (uintptr, string) {
